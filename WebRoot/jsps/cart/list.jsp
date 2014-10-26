@@ -1,0 +1,276 @@
+<%@ page language="java" import="java.util.*" pageEncoding="UTF-8"%>
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions"%>
+
+ 
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <title>cartlist.jsp</title>
+    
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">    
+	<meta http-equiv="keywords" content="keyword1,keyword2,keyword3">
+	<meta http-equiv="description" content="This is my page">
+	<!--
+	<link rel="stylesheet" type="text/css" href="styles.css">
+	-->
+	<script src="<c:url value='/jquery/jquery-1.5.1.js'/>"></script>
+	<script src="<c:url value='/js/round.js'/>"></script>
+	
+	<link rel="stylesheet" type="text/css" href="<c:url value='/jsps/css/cart/list.css'/>">
+<script type="text/javascript">
+$(function() {
+	showTotal();//计算总计
+	
+	/*
+		给全选添加时间
+	*/
+	$("#selectAll").click(function(){
+		var bool = $("#selectAll").attr("checked");//获取全选状态
+		setItemCheckBox(bool);//让所有复选框与全选同步
+		setJieSuan(bool);//让结算按钮与全选同步
+		showTotal();//结算 
+	});
+	
+	
+	/*
+		给所有条目的复选框添加click时间
+	*/
+	$(":checkbox[name=checkboxBtn]").click(function(){
+		var all = $(":checkbox[name=checkboxBtn]").length;//所有条目的个数
+		var select  = $(":checkbox[name=checkboxBtn][checked=true]").length;//所有被选择的项目的个数
+		if(all==select){
+			$("#selectAll").attr("checked",true);
+			setJieSuan(true);//结算按钮有效
+		}else if(select == 0){
+			$("#selectAll").attr("checked",false);
+			setJieSuan(false);//结算按钮失效
+		}else{
+			$("#selectAll").attr("checked",false);
+			setJieSuan(true);//结算按钮有效 
+		}
+		showTotal();//重新计算总计
+	});	
+	
+	/*
+		给加号添加监听器
+	*/
+	$(".jia").click(function(){
+		//获取CartItemId
+		var id = $(this).attr("id").substring(0,32);
+		//获取输入框中数量
+		var quantity = $("#"+id+"Quantity").val();
+		
+		sendUpdateQuantity(id, Number(quantity)+1);		
+	});
+	
+	/*
+		给减号添加监听器
+	*/
+	$(".jian").click(function(){
+		//获取CartItemId
+		var id = $(this).attr("id").substring(0,32);
+		//获取输入框中数量
+		var quantity = $("#"+id+"Quantity").val();
+		
+		//判断当前数量是否为1，如果为1，就不修改数量而是删除该条目。
+		if(quantity == 1){
+			if(confirm("您是否要删除该条目？")){
+				location = "/bookstore/CartItemServlet?method=batchDelete&cartItemIds="+id;
+			}
+		}else{
+			sendUpdateQuantity(id, Number(quantity)-1);			
+		}
+		
+	});
+	
+	
+	
+	
+	
+});
+
+/*
+	请求服务器修改数量
+*/
+function sendUpdateQuantity(id , quantity ){
+	//ajax常用7个参数
+	$.ajax({
+		url:"/bookstore/CartItemServlet",//请求url
+		data:{method:"updateQuantity",cartItemId:id,quantity:quantity},//向服务器传递的数据
+		dataType:"json",//返回值类型
+		type:"POST",//请求方式
+		async:false,//是否异步
+		cache:false,//是否缓存
+		success:function(result){//请求成功执行的方法，获取返回的数据
+			//1、修改数量
+			$("#"+id+"Quantity").val(result.quantity);
+			//2、修改小计
+			$("#"+id+"Subtotal").text(result.subtotal);
+			//3、重新进行总计计算
+			showTotal();
+		}
+	});
+}
+
+/*
+	批量删除
+*/
+function batchDelete(){
+	//1、获取所有选中的条目的的浮选框
+	//2、创建一个数组，把所有选中的复选框的值添加到数组中
+	//3、指定location为CartItemServlet，参数method=batchDelete，参数cartItemIds=数组的toString();
+	var cartItemIdArray = new Array();
+	$(":checkbox[name=checkboxBtn][checked=true]").each(function(){
+		cartItemIdArray.push($(this).val());//把复选框的值添加到数组中
+	});
+	location = "/bookstore/CartItemServlet?method=batchDelete&cartItemIds="+cartItemIdArray;
+}
+
+
+/*
+	统一设置所有条目的浮选按钮
+*/
+function setItemCheckBox(bool){
+	$(":checkbox[name=checkboxBtn]").attr("checked",bool);
+}
+
+/*
+	设置结算按钮样式
+*/
+function setJieSuan(bool){
+	if(bool){
+		$("#jiesuan").removeClass("kill").addClass("jiesuan");
+		$("#jiesuan").unbind("click");//撤销当前元素上所有的click事件
+	}else{
+		$("#jiesuan").removeClass("jiesuan").addClass("kill");
+		$("#jiesuan").click(function(){return false;});
+	}
+}
+
+/*
+	计算总计
+*/
+function showTotal(){
+	/*
+		1、获取所有的被勾选的条目复选框！
+	*/
+	var total=0;
+	$(":checkbox[name=checkboxBtn][checked=true]").each(function(){
+		//2、获取复选框的值，即cartItemId
+		var id = $(this).val();
+		//3、在通过cartItemId找到小计，获取文本
+		var text = $("#"+id+"Subtotal").text();
+		//4、累计计算
+		total+=Number(text);
+	});
+	
+	//5、把总计显示在总计元素上
+	$("#total").text(round(total,3));
+};
+
+
+//结算方法
+function jiesuan(){
+	//1、获取所有的勾选条目id，放到数组中
+	//2、把数组的值tostring(),赋给表单的cartItemIds的这个hidden
+	//3、提交表单
+	var cartItemIdArray = new Array();
+	$(":checkbox[name=checkboxBtn][checked=true]").each(function(){
+		var id = $(this).val();
+		cartItemIdArray.push(id);
+	});
+	$("#cartItemIds").val(cartItemIdArray.toString());
+	
+	//将总计数设置到total的hidden中传给/showitem.jsp
+	$("#hiddenTotal").val($("#total").text());
+	
+	$("#jieSuanForm").submit();
+}
+
+</script>
+  </head>
+  <body>
+
+	<c:choose>
+		<c:when test="${empty  cartItemList}">
+
+	<table width="95%" align="center" cellpadding="0" cellspacing="0">
+		<tr>
+			<td align="right">
+				<img align="top" src="<c:url value='/images/icon_empty.png'/>"/>
+			</td>
+			<td>
+				<span class="spanEmpty">您的购物车中暂时没有商品</span>
+			</td>
+		</tr>
+	</table>  
+	</c:when>
+
+
+<c:otherwise>
+<table width="95%" align="center" cellpadding="0" cellspacing="0">
+	<tr align="center" bgcolor="#efeae5">
+		<td align="left" width="50px">
+			<input type="checkbox" id="selectAll" checked="checked"/><label for="selectAll">全选</label>
+		</td>
+		<td colspan="2">商品名称</td>
+		<td>单价</td>
+		<td>数量</td>
+		<td>小计</td>
+		<td>操作</td>
+	</tr>
+
+	<c:forEach items="${cartItemList }" var="cartItem">
+		<tr align="center">
+		<td align="left">
+			<input value="${cartItem.cartItemId }" type="checkbox" name="checkboxBtn" checked="checked"/>
+		</td>
+		<td align="left" width="70px">
+			<a class="linkImage" href="<c:url value='/BookServlet?method=load&bid=${cartItem.book.bid }'/>"><img border="0" width="54" align="top" src="<c:url value='/${cartItem.book.image_b }'/>"/></a>
+		</td>
+		<td align="left" width="400px">
+		    <a href="<c:url value='/BookServlet?method=load&bid=${cartItem.book.bid }'/>"><span>${cartItem.book.bname }</span></a>
+		</td>
+		<td><span>&yen;<span class="currPrice">${cartItem.book.currPrice }</span></span></td>
+		<td>
+			<a class="jian" id="${cartItem.cartItemId }Jian"></a>
+			<input class="quantity" readonly="readonly" id="${cartItem.cartItemId }Quantity" type="text" value="${cartItem.quantity }"/>
+			<a class="jia" id="${cartItem.cartItemId }Jia"></a>
+		</td>
+		<td width="100px">
+			<span class="price_n">&yen;<span class="subTotal" id="${cartItem.cartItemId }Subtotal">${cartItem.subtotal }</span></span>
+		</td>
+		<td>
+			<a href="<c:url value='/CartItemServlet?method=batchDelete&cartItemIds=${ cartItem.cartItemId}'/>">删除</a>
+		</td>
+		</tr>
+	</c:forEach>
+
+	
+	<tr>
+		<td colspan="4" class="tdBatchDelete">
+			<a href="javascript:batchDelete();">批量删除</a>
+		</td>
+		<td colspan="3" align="right" class="tdTotal">
+			<span>总计：</span><span class="price_t">&yen;<span id="total"></span></span>
+		</td>
+	</tr>
+	<tr>
+		<td colspan="7" align="right">
+			<a href="<c:url value='javascript:jiesuan();'/>" id="jiesuan" class="jiesuan"></a>
+		</td>
+	</tr>
+	</table>
+	<form id="jieSuanForm" action="<c:url value='/CartItemServlet'/>" method="post">
+		<input type="hidden" name="cartItemIds" id="cartItemIds"/>
+		<input type="hidden" name="total" id="hiddenTotal"/>
+		<input type="hidden" name="method" value="loadCartItems"/>
+	</form>
+
+</c:otherwise>
+</c:choose> 
+  </body>
+</html>
